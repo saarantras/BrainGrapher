@@ -10,6 +10,9 @@ class Graph {
   Slider pixelSecondsSlider;
   RadioButton renderModeRadio;
   RadioButton scaleRadio;
+  Button recordButton;
+  Button playbackButton;
+  Textfield filename;
 
   Graph(int _x, int _y, int _w, int _h) {
     x = _x;
@@ -47,10 +50,30 @@ class Graph {
     scaleRadio.setColorForeground(color(255));
     scaleRadio.setColorActive(color(0));
     scaleRadio.setColorBackground(color(180));
-    scaleRadio.setSpacingRow(4);    
+    scaleRadio.setSpacingRow(4);  
     scaleRadio.addItem("Local Maximum", 1);
     scaleRadio.addItem("Global Maximum", 2);        
     scaleRadio.activate(0);
+    
+    recordButton = controlP5.addButton("Record");
+    recordButton.setColorForeground(color(255));
+    recordButton.setColorActive(color(255,0,0));
+    recordButton.setColorBackground(color(180));
+    recordButton.setPosition(104,65);
+    recordButton.setSwitch(true);
+    
+    playbackButton = controlP5.addButton("Playback");
+    playbackButton.setColorForeground(color(255));
+    playbackButton.setColorActive(color(255,0,0));
+    playbackButton.setColorBackground(color(180));
+    playbackButton.setPosition(104,90);
+    playbackButton.setSwitch(true);
+    
+    filename= controlP5.addTextfield("Filename",16,90,80,15);
+    filename.setColorForeground(color(255));
+    filename.setColorActive(color(0));
+    filename.setColorBackground(color(180));
+    filename.setText("brainwaves");
   }
 
   void update() {
@@ -94,7 +117,53 @@ class Graph {
     // the pixels per second value
     rightTime = System.currentTimeMillis();
     leftTime = rightTime - ((w / pixelsPerSecond) * 1000);
-  }
+    
+    
+    
+   boolean clicked_record=false;
+   boolean clicked_playback=false;
+   if(recording!=recordButton.isOn()){
+      clicked_record=true;
+    }
+    if(playback!=playbackButton.isOn()){
+      clicked_playback=true;
+    }
+    
+    
+    if(clicked_playback){
+      if(!recording && !playback){
+        //start playback
+        startPlayback(filename.getText());
+      } else if(!recording && playback){
+        //stop playback
+        stopPlayback();
+      } else if (recording && !playback){
+        //stop recording, start playback
+        stopRecording();
+        recordButton.setOff();
+        startPlayback(filename.getText());
+      }
+    }
+    if(clicked_record){
+      //println("Clicked record...");
+      if(!recording && !playback){
+        //start record
+        startRecording(filename.getText());
+      } else if(!recording && playback){
+        //stop playback, start recording
+        stopPlayback();
+        playbackButton.setOff();
+        startRecording(filename.getText());
+        
+        startRecording(filename.getText());
+      } else if (recording && !playback){
+        stopRecording();
+        //stop recording
+        //stopRecording();
+      }
+    }
+    
+}
 
   void draw() {
     pushMatrix();
@@ -196,6 +265,6 @@ class Graph {
     // GUI background matte
     noStroke();
     fill(255, 150);
-    rect(10, 10, 195, 81);
+    rect(10, 10, 195, 110);
   }
 }

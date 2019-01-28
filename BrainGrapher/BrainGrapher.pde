@@ -13,6 +13,8 @@ ControlP5 controlP5;
 
 Serial serial;
 
+String[] categories= new String[] {"Signal Quality","Attention","Meditation","Delta","Theta","Low Alpha","High Alpha","Low Beta","High Beta","Low Gamma","High Gamma"};
+
 Channel[] channels = new Channel[11];
 Monitor[] monitors = new Monitor[10];
 Graph graph;
@@ -22,8 +24,47 @@ int packetCount = 0;
 int globalMax = 0;
 String scaleMode;
 
+
+boolean recording=false;
+boolean playback=false;
+JSONArray data= new JSONArray();
+String filename="";
+
+
+int lastTick=0;
+int startPacket=0;
+void startRecording(String fname){
+  startPacket=packetCount;
+  filename=fname;
+  if(!filename.endsWith(".json")){
+    filename+=".json";
+  }
+  recording=true;
+  playback=false;
+}
+
+void stopRecording(){
+  recording=false;
+  data= new JSONArray();
+}
+
+void startPlayback(String fname){
+  index=0;
+  data=loadJSONArray(fname+".json");
+  lastTick=millis();
+  recording=false;
+  playback=true;
+  
+}
+
+void stopPlayback(){
+  playback=false;
+  data= new JSONArray();
+}
+
 void setup() {
   // Set up window
+  lastTick=millis();
   size(1024, 768);
   frameRate(60);
   smooth();
@@ -50,6 +91,8 @@ void setup() {
   controlP5.disableShortcuts(); 
   controlP5.setMouseWheelRotation(0);
   controlP5.setMoveable(false);
+  
+  
 
   // Create the channel objects
   channels[0] = new Channel("Signal Quality", color(0), "");
@@ -74,7 +117,7 @@ void setup() {
   channels[0].allowGlobal = false;
   channels[1].allowGlobal = false;
   channels[2].allowGlobal = false;
-
+   
   // Set up the monitors, skip the signal quality
   for (int i = 0; i < monitors.length; i++) {
     monitors[i] = new Monitor(channels[i + 1], i * (width / 10), height / 2, width / 10, height / 2);
@@ -85,8 +128,9 @@ void setup() {
   // Set up the graph
   graph = new Graph(0, 0, width, height / 2);
 
-  // Set yup the connection light
+  // Set up the connection light
   connectionLight = new ConnectionLight(width - 140, 10, 20);
+  
 }
 
 void draw() {
@@ -115,13 +159,13 @@ void draw() {
   }
 }
 
-void serialEvent(Serial p) {
+
+void displayNewData(String incomingString){
   // Split incoming packet on commas
   // See https://github.com/kitschpatrol/Arduino-Brain-Library/blob/master/README for information on the CSV packet format
   
-  String incomingString = p.readString().trim();
-  print("Received string over serial: ");
-  println(incomingString);  
+  //print("Received string over serial: ");
+  //println(incomingString);  
   
   String[] incomingValues = split(incomingString, ',');
 
@@ -129,13 +173,24 @@ void serialEvent(Serial p) {
   if (incomingValues.length > 1) {
     packetCount++;
 
-    // Wait till the third packet or so to start recording to avoid initialization garbage.
+    // Wait till the third packet or so to start displaying/recording to avoid initialization garbage.
+    //Note that graph's aren't meaningful when only a small amount of data has been collected.
+    //Since the range of the bars hasn't been established yet.
     if (packetCount > 3) {
+      
+      JSONObject pointToWrite= new JSONObject();
+      if(recording){
+        pointToWrite.setString("timestamp",String.valueOf(year())+"-"+String.valueOf(month())+"-"+String.valueOf(day())+" "+String.valueOf(hour())+":"+String.valueOf(minute())+":"+String.valueOf(second()));
+      }
       
       for (int i = 0; i < incomingValues.length; i++) {
         String stringValue = incomingValues[i].trim();
-
-      int newValue = Integer.parseInt(stringValue);
+        int newValue = Integer.parseInt(stringValue);
+        
+        if(recording){
+          pointToWrite.setInt(categories[i],newValue);
+        }
+      
 
         // Zero the EEG power values if we don't have a signal.
         // Can be useful to leave them in for development.
@@ -145,8 +200,49 @@ void serialEvent(Serial p) {
 
         channels[i].addDataPoint(newValue);
       }
+      
+      
+      if(recording){
+        //add the latest point to the array and flush it (just in case)
+       data.setJSONObject(packetCount-startPacket-1,pointToWrite);
+       saveJSONArray(data,filename);
+      }
+      
     }
-  } 
+  }
+}
+//String[] categories= new String[] {"Signal Quality","Attention","Meditation","Delta","Theta","Low Alpha","High Alpha","Low Beta","High Beta","Low Gamma","High Gamma"};
+
+int index=0;
+void serialEvent(Serial p) {
+  if(playback){
+    p.readString();
+    if(millis()-lastTick>800){
+      
+      if(index<data.size()){
+        lastTick=millis();
+        String outgoing="";
+        JSONObject current=data.getJSONObject(index);
+        for(int i=0;i<11;i++){
+          outgoing+=String.valueOf(current.getInt(categories[i]));
+          if(i!=10){
+            outgoing+=",";
+          }
+        }
+        println(outgoing);
+        displayNewData(outgoing);    
+        index+=1;
+      }
+      else{
+        //End of file? Just spit out 0s
+        displayNewData("0,0,0,0,0,0,0,0,0,0,0");
+      }
+      
+    }
+  }
+  else{
+    displayNewData(p.readString().trim());
+  }
 }
 
 
